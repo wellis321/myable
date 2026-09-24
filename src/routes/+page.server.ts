@@ -1,23 +1,18 @@
-import { createPuzzle, getPuzzle, getStats } from '$lib/server/db';
+import { getCatalog, getStats } from '$lib/server/db';
+import { DIFFICULTIES, SIZES, type BoardSize, type Difficulty } from '$lib/puzzle';
 import type { PageServerLoad } from './$types';
 
-const COOKIE = 'numble_puzzle';
-
-export const load: PageServerLoad = async ({ cookies }) => {
-	const existingId = Number(cookies.get(COOKIE));
-	let puzzle = Number.isInteger(existingId) && existingId > 0 ? await getPuzzle(existingId) : null;
-	if (!puzzle) {
-		puzzle = await createPuzzle();
-		cookies.set(COOKIE, String(puzzle.id), {
-			path: '/',
-			httpOnly: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 60
-		});
-	}
-
+export const load: PageServerLoad = async ({ url }) => {
+	const sizeParam = Number(url.searchParams.get('size'));
+	const difficultyParam = url.searchParams.get('difficulty') ?? 'medium';
+	const size = SIZES.includes(sizeParam as BoardSize) ? (sizeParam as BoardSize) : 7;
+	const difficulty = DIFFICULTIES.includes(difficultyParam as Difficulty)
+		? (difficultyParam as Difficulty)
+		: 'medium';
 	return {
-		puzzle,
+		size,
+		difficulty,
+		catalog: await getCatalog(size, difficulty),
 		stats: await getStats()
 	};
 };
