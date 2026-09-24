@@ -1,0 +1,17 @@
+---
+description: After a Hostinger deploy, confirm the Node start file is index.js so the site does not 503
+alwaysApply: true
+---
+
+# Hostinger deploy
+
+SvelteKit writes the server to `build/index.js`. Hostinger already runs from the `build` folder, so the stored start file must be `index.js`. A start file of `build/index.js` makes Hostinger look for `build/build/index.js` and the site returns 503.
+
+Site: `paleturquoise-turkey-225853.hostingersite.com`, account `u248320297`.
+
+After every push or Node build:
+
+1. Read the stored Node build settings. `entry_file` must be `index.js`, `output_directory` must be `build`, `app_type` must be `svelte-kit`.
+2. If `entry_file` is anything else, update the stored settings to `index.js` before the next git deploy. A build started from the API does not overwrite stored settings once they exist, and git auto-deploy uses the stored settings.
+3. Do not set `NODE_ENV=production` on the Hostinger app. That skips the dev dependencies the build needs.
+4. After the build completes, request the live site and confirm it returns 200. A completed build with the wrong start file still 503s.

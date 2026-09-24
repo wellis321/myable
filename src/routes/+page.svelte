@@ -1,16 +1,20 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { DIFFICULTIES, SIZES, type BoardSize, type Difficulty } from '$lib/puzzle';
+	import { clearSavedIds, savedIds } from '$lib/saved';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	let stats = $state(data.stats);
 	let catalog = $state(data.catalog);
-	let dialog = $state<'help' | 'stats' | 'reset' | null>(null);
+	let dialog = $state<'help' | 'stats' | 'reset' | 'fresh' | null>(null);
+	let resumed = $state<number[]>([]);
 
 	$effect(() => {
 		catalog = data.catalog;
 		stats = data.stats;
+		if (browser) resumed = savedIds();
 	});
 	let busy = $state(false);
 	let resetSizes = $state<BoardSize[]>([data.size]);
@@ -34,6 +38,34 @@
 		resetLevels = resetLevels.includes(level)
 			? resetLevels.filter((item) => item !== level)
 			: [...resetLevels, level];
+	}
+
+	function setLabel() {
+		const size = data.size === 5 ? 'Small' : data.size === 9 ? 'Large' : 'Classic';
+		const level = data.difficulty === 'medium' ? 'Normal' : data.difficulty;
+		return `${size} ${level}`;
+	}
+
+	async function dealNewSet() {
+		if (busy) return;
+		busy = true;
+		try {
+			const retired = catalog.map((slot) => slot.id);
+			const response = await fetch('/api/sets', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ size: data.size, difficulty: data.difficulty })
+			});
+			if (!response.ok) return;
+			const payload = await response.json();
+			clearSavedIds(payload.retired ?? retired);
+			stats = payload.stats;
+			catalog = payload.catalog;
+			resumed = savedIds();
+			dialog = null;
+		} finally {
+			busy = false;
+		}
 	}
 
 	async function resetSelected() {
@@ -105,8 +137,9 @@
 				class="slot"
 				class:solved={slot.solved}
 				class:attempted={slot.attempted && !slot.solved}
+				class:resumed={resumed.includes(slot.id) && !slot.solved}
 				href={playHref(slot.sequence)}
-				aria-label="Puzzle {slot.sequence}{slot.solved ? `, ${slot.stars} stars` : slot.attempted ? ', attempted' : ''}"
+				aria-label="Puzzle {slot.sequence}{slot.solved ? `, ${slot.stars} stars` : resumed.includes(slot.id) ? ', in progress' : slot.attempted ? ', attempted' : ''}"
 			>
 				<span>{slot.sequence}</span>
 				{#if slot.solved}<small>{slot.stars}★</small>{/if}
@@ -115,9 +148,19 @@
 	</div>
 
 	<div class="actions">
+		<button type="button" class="texty" onclick={() => (dialog = 'fresh')}>New set</button>
 		<button type="button" class="texty" onclick={() => (dialog = 'reset')}>Reset scores</button>
 	</div>
 </main>
+
+{#if dialog === 'fresh'}
+	<div class="scrim" role="presentation" onclick={() => (dialog = null)}></div>
+	<div class="sheet" role="dialog" aria-labelledby="fresh-title">
+		<h2 id="fresh-title">New set</h2>
+		<p>Replace these 50 {setLabel()} puzzles with a new set. Scores and unfinished boards for this set are cleared. The other sizes and difficulties stay.</p>
+		<button type="button" class="solid" disabled={busy} onclick={dealNewSet}>{busy ? 'Dealing…' : 'Deal 50 new puzzles'}</button>
+	</div>
+{/if}
 
 {#if dialog === 'reset'}
 	<div class="scrim" role="presentation" onclick={() => (dialog = null)}></div>
@@ -152,7 +195,7 @@
 		<h2 id="help-title">How to play</h2>
 		<p>Pick a number to open that waffle. Swap tiles until every full row and every full column holds 1 to {data.size}, once each.</p>
 		<p>Green means that number is already home. Each black clue is the sum of the two squares its arrows point at.</p>
-		<p>There are 50 puzzles in each size and difficulty. A green number is solved, and the stars are the score you earned.</p>
+		<p>There are 50 puzzles in each size and difficulty. A green number is solved, and the stars are the score you earned. An outlined number is one you started and can finish later. New set deals 50 different puzzles for the size and difficulty you are looking at.</p>
 		<button type="button" class="solid" onclick={() => (dialog = null)}>Back to the set</button>
 	</div>
 {/if}
@@ -315,6 +358,10 @@
 
 	.slot.attempted {
 		background: oklch(0.9 0.03 70);
+	}
+
+	.slot.resumed {
+		box-shadow: inset 0 0 0 2px oklch(0.42 0.04 250);
 	}
 
 	.actions {

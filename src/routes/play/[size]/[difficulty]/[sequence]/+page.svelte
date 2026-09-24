@@ -11,14 +11,13 @@
 		type Clue,
 		type Difficulty
 	} from '$lib/puzzle';
+	import { clearSaved, loadSaved, saveProgress, type SavedPlay } from '$lib/saved';
 	import type { PageData } from './$types';
 
 	type CatalogSlot = { sequence: number; id: number; solved: boolean; stars: number; attempted: boolean };
 	type Snapshot = { board: number[][]; swapsLeft: number; phase: 'play' | 'won' | 'lost'; recorded: boolean };
 
 	let { data }: { data: PageData } = $props();
-
-	const SAVE_KEY = 'numble-active';
 
 	let puzzle = $state(data.puzzle);
 	let stats = $state(data.stats);
@@ -45,44 +44,53 @@
 	let solution = $derived(puzzle.solution);
 	let lines = $derived(puzzle.solution.map((_, index) => index));
 
+	function applySaved(saved: SavedPlay) {
+		board = saved.board;
+		swapsLeft = saved.swapsLeft;
+		phase = saved.phase === 'won' ? 'play' : saved.phase;
+		recorded = saved.recorded && phase !== 'play' ? saved.recorded : false;
+		revealed = saved.revealed && phase !== 'play';
+		history = Array.isArray(saved.history) ? saved.history : [];
+		savedStars = null;
+	}
+
+	function restorePuzzle(
+		next: typeof puzzle,
+		progress: { solved: boolean; stars: number } | null
+	) {
+		puzzle = next;
+		savedStars = progress?.solved ? progress.stars : null;
+		history = [];
+		selected = null;
+		revealed = false;
+		const saved = progress?.solved ? null : loadSaved(next.id);
+		if (saved) {
+			applySaved(saved);
+			return;
+		}
+		board = next.start.map((row) => row.slice());
+		swapsLeft = next.swapLimit;
+		phase = progress?.solved ? 'won' : 'play';
+		recorded = Boolean(progress?.solved);
+	}
+
 	$effect(() => {
 		if (!browser || !ready) return;
-		localStorage.setItem(
-			SAVE_KEY,
-			JSON.stringify({
-				id: puzzle.id,
-				board,
-				swapsLeft,
-				phase,
-				recorded,
-				revealed,
-				history,
-				savedStars
-			})
-		);
+		const id = puzzle.id;
+		const untouched = phase === 'play' && !revealed && history.length === 0 && swapsLeft === puzzle.swapLimit;
+		if (phase === 'won' || untouched) {
+			clearSaved(id);
+			return;
+		}
+		saveProgress(id, { board, swapsLeft, phase, recorded, revealed, history, savedStars });
 	});
 
 	$effect(() => {
 		if (!browser) return;
 		const seenHelp = localStorage.getItem('numble-help-seen') === '1';
-		dialog = seenHelp ? null : 'help';
-		const raw = localStorage.getItem(SAVE_KEY);
-		if (raw) {
-			try {
-				const saved = JSON.parse(raw);
-				if (saved.id === data.puzzle.id && Array.isArray(saved.board) && !data.progress?.solved) {
-					board = saved.board;
-					swapsLeft = saved.swapsLeft;
-					phase = saved.phase;
-					recorded = saved.recorded;
-					revealed = saved.revealed;
-					history = Array.isArray(saved.history) ? saved.history : [];
-					savedStars = saved.savedStars ?? null;
-				}
-			} catch {
-				localStorage.removeItem(SAVE_KEY);
-			}
-		}
+		if (!ready) dialog = seenHelp ? null : 'help';
+		const incoming = data.puzzle;
+		if (!ready || incoming.id !== puzzle.id) restorePuzzle(incoming, data.progress);
 		ready = true;
 	});
 
@@ -258,28 +266,7 @@
 		selected = null;
 		revealed = false;
 		dialog = null;
-		const raw = browser ? localStorage.getItem(SAVE_KEY) : null;
-		if (raw && !payload.progress?.solved) {
-			try {
-				const saved = JSON.parse(raw);
-				if (saved.id === payload.puzzle.id && Array.isArray(saved.board)) {
-					board = saved.board;
-					swapsLeft = saved.swapsLeft;
-					phase = saved.phase;
-					recorded = saved.recorded;
-					revealed = saved.revealed;
-					history = Array.isArray(saved.history) ? saved.history : [];
-					savedStars = saved.savedStars ?? null;
-					return;
-				}
-			} catch {
-				localStorage.removeItem(SAVE_KEY);
-			}
-		}
-		board = payload.puzzle.start.map((row: number[]) => row.slice());
-		swapsLeft = payload.puzzle.swapLimit;
-		phase = payload.progress?.solved ? 'won' : 'play';
-		recorded = Boolean(payload.progress?.solved);
+		restorePuzzle(payload.puzzle, payload.progress);
 	}
 
 	async function openSet(size = sizeChoice, difficulty = difficultyChoice, sequence?: number) {
@@ -347,6 +334,42 @@
 		resetLevels = resetLevels.includes(level)
 			? resetLevels.filter((item) => item !== level)
 			: [...resetLevels, level];
+	}
+
+	let awayFromStart = $derived(
+		phase !== 'play' || revealed || history.length > 0 || swapsLeft !== puzzle.swapLimit
+	);
+
+	async function startAgain() {
+		if (busy || !awayFromStart) return;
+		busy = true;
+		try {
+			if (recorded) {
+				const response = await fetch('/api/progress', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ puzzleId: puzzle.id })
+				});
+				if (response.ok) {
+					const payload = await response.json();
+					stats = payload.stats;
+					catalog = catalog.map((slot) =>
+						slot.id === puzzle.id ? { ...slot, attempted: false, solved: false, stars: 0 } : slot
+					);
+				}
+			}
+			clearSaved(puzzle.id);
+			board = puzzle.start.map((row) => row.slice());
+			swapsLeft = puzzle.swapLimit;
+			phase = 'play';
+			recorded = false;
+			revealed = false;
+			savedStars = null;
+			history = [];
+			selected = null;
+		} finally {
+			busy = false;
+		}
 	}
 
 	function showSolution() {
@@ -431,6 +454,7 @@
 
 	<div class="actions">
 		<button type="button" class="texty" onclick={undo} disabled={busy || history.length === 0}>Undo</button>
+		<button type="button" class="texty" onclick={startAgain} disabled={busy || !awayFromStart}>Start again</button>
 		{#if phase === 'play'}
 			<button type="button" class="texty" onclick={showSolution}>Show solution</button>
 		{/if}

@@ -209,6 +209,37 @@ export async function openCatalogPuzzle(size: BoardSize, difficulty: Difficulty,
 	return { puzzle, catalog, progress: slot.attempted ? { solved: slot.solved, stars: slot.stars } : null };
 }
 
+export async function replaceCatalog(size: BoardSize, difficulty: Difficulty) {
+	await ensureSchema();
+	const [rows] = await pool.query(
+		'SELECT id FROM puzzles WHERE board_size = ? AND difficulty = ? AND sequence_no IS NOT NULL',
+		[size, difficulty]
+	);
+	const retired = (rows as { id: number }[]).map((row) => row.id);
+	if (retired.length > 0) {
+		await pool.query('DELETE FROM plays WHERE puzzle_id IN (?)', [retired]);
+		await pool.query('DELETE FROM puzzles WHERE id IN (?)', [retired]);
+	}
+	for (let sequence = 1; sequence <= CATALOG_COUNT; sequence++) {
+		const puzzle = generatePuzzle(size, difficulty);
+		await pool.query(
+			`INSERT INTO puzzles (solution, start_board, clues, board_size, difficulty, swap_limit, min_swaps, sequence_no)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				JSON.stringify(puzzle.solution),
+				JSON.stringify(puzzle.start),
+				JSON.stringify(puzzle.clues),
+				puzzle.size,
+				puzzle.difficulty,
+				puzzle.swapLimit,
+				puzzle.minSwaps,
+				sequence
+			]
+		);
+	}
+	return { retired, catalog: await getCatalog(size, difficulty), stats: await getStats() };
+}
+
 export async function clearPlay(puzzleId: number) {
 	await ensureSchema();
 	await pool.query('DELETE FROM plays WHERE puzzle_id = ?', [puzzleId]);
