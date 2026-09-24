@@ -79,19 +79,23 @@
 	<div class="options">
 		<div class="choice">
 			<span>Size</span>
-			{#each SIZES as size}
-				<a class:on={data.size === size} href={setHref(size, data.difficulty)}>
-					{size === 5 ? 'Small' : size === 9 ? 'Large' : 'Classic'}
-				</a>
-			{/each}
+			<div class="picks">
+				{#each SIZES as size}
+					<a class:on={data.size === size} href={setHref(size, data.difficulty)}>
+						{size === 5 ? 'Small' : size === 9 ? 'Large' : 'Classic'}
+					</a>
+				{/each}
+			</div>
 		</div>
 		<div class="choice">
 			<span>Difficulty</span>
-			{#each DIFFICULTIES as level}
-				<a class:on={data.difficulty === level} href={setHref(data.size, level)}>
-					{level === 'medium' ? 'Normal' : level}
-				</a>
-			{/each}
+			<div class="picks">
+				{#each DIFFICULTIES as level}
+					<a class:on={data.difficulty === level} href={setHref(data.size, level)}>
+						{level === 'medium' ? 'Normal' : level}
+					</a>
+				{/each}
+			</div>
 		</div>
 	</div>
 
@@ -228,24 +232,37 @@
 
 	.options {
 		display: grid;
-		gap: 0.45rem;
+		gap: 0.55rem;
 		margin-bottom: 0.85rem;
+	}
+
+	.options .choice {
+		display: grid;
+		grid-template-columns: 7.4rem minmax(0, 1fr);
+		align-items: center;
+		column-gap: 1.15rem;
 	}
 
 	.choice {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.3rem;
+		gap: 0.45rem;
 	}
 
 	.choice span {
-		width: 4.6rem;
+		width: 7.4rem;
 		font-size: 0.72rem;
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: oklch(0.45 0.03 70);
 		font-weight: 800;
+	}
+
+	.picks {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
 	}
 
 	.choice a,

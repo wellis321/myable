@@ -374,17 +374,13 @@
 </svelte:head>
 
 <main>
-	<header>
-		<a class="back" href="/?size={puzzle.size}&difficulty={puzzle.difficulty}">Set</a>
-		<div class="brand">
-			<p class="eyebrow">Number waffle</p>
-			<h1>Myable</h1>
-			<p class="number">#{puzzle.sequence ?? puzzle.id} of 50</p>
-		</div>
-		<button class="icon" type="button" aria-label="How to play" onclick={() => (dialog = 'help')}>?</button>
-	</header>
+	<div class="play">
+		<nav class="nav">
+			<a class="back" href="/?size={puzzle.size}&difficulty={puzzle.difficulty}">Home</a>
+			<button class="icon" type="button" aria-label="How to play" onclick={() => (dialog = 'help')}>?</button>
+		</nav>
 
-	<div class="board" class:dim={phase !== 'play' && !revealed} style:--n={puzzle.size}>
+		<div class="board" class:dim={phase !== 'play' && !revealed} style:--n={puzzle.size}>
 		{#each lines as row}
 			{#each lines as col}
 				{#if isHole(row, col)}
@@ -429,6 +425,7 @@
 			{/each}
 		{/each}
 		</div>
+	</div>
 
 	<p class="remaining" aria-live="polite">{revealed ? 'Solution' : swapLabel()}</p>
 
@@ -547,7 +544,6 @@
 			max(0.75rem, env(safe-area-inset-left));
 	}
 
-	header,
 	.options,
 	.remaining,
 	.actions,
@@ -556,15 +552,18 @@
 		margin-inline: auto;
 	}
 
-	header {
-		display: grid;
-		grid-template-columns: 3rem 1fr 3rem;
-		align-items: center;
-		margin-bottom: 1.1rem;
+	.play {
+		width: 100%;
+		max-width: min(100%, calc(100svh - 8.5rem));
+		margin-inline: auto;
 	}
 
-	.brand {
-		text-align: center;
+	.nav {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		min-height: 2.7rem;
+		margin-bottom: 0.4rem;
 	}
 
 	.eyebrow {
@@ -575,36 +574,28 @@
 		color: oklch(0.48 0.04 65);
 	}
 
-	h1 {
-		margin: 0;
-		font-family: Outfit, sans-serif;
-		font-weight: 700;
-		font-size: clamp(2.4rem, 8vw, 3.3rem);
-		letter-spacing: -0.04em;
-		line-height: 0.9;
-		color: oklch(0.27 0.04 55);
-	}
-
-	.number {
-		margin: 0.2rem 0 0;
-		color: oklch(0.45 0.03 70);
-		font-weight: 800;
-	}
-
 	.icon,
 	.back {
-		width: 2.7rem;
-		height: 2.7rem;
 		display: grid;
 		place-items: center;
+		height: 2.7rem;
 		border: 0;
 		border-radius: 0.25rem;
 		background: oklch(0.93 0.005 260);
 		color: oklch(0.3 0.03 60);
-		font-size: 0.78rem;
+		font-size: 0.85rem;
 		font-weight: 800;
 		text-decoration: none;
 		cursor: pointer;
+	}
+
+	.back {
+		min-width: 4.5rem;
+		padding: 0 0.9rem;
+	}
+
+	.icon {
+		width: 2.7rem;
 	}
 
 	.options {
@@ -690,7 +681,6 @@
 		grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr));
 		gap: clamp(0.18rem, 0.9cqi, 0.35rem);
 		width: 100%;
-		max-width: min(100%, calc(100svh - 11rem));
 		margin-inline: auto;
 		padding: 0.15rem;
 		container-type: inline-size;
@@ -874,18 +864,14 @@
 	}
 
 	@media (max-height: 740px) {
-		.board {
-			max-width: min(100%, calc(100svh - 15rem));
+		.play {
+			max-width: min(100%, calc(100svh - 7.25rem));
 		}
 	}
 
 	@media (max-width: 700px) and (max-height: 740px) {
-		header {
-			margin-bottom: 0.4rem;
-		}
-
-		h1 {
-			font-size: 1.7rem;
+		.nav {
+			margin-bottom: 0.25rem;
 		}
 
 		.options {
